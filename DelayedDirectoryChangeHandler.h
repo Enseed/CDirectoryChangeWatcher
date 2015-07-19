@@ -67,29 +67,6 @@ public:
 
 };
 
-class CDelayedNotificationWindow : public CDelayedNotifier
-//
-//	A class that implements a
-//	there will always be only one of the actual windows 
-//	in existance. 
-//
-{
-public:
-		CDelayedNotificationWindow(){  AddRef(); }
-		virtual ~CDelayedNotificationWindow(){ Release(); }
-		
-
-		void PostNotification(CDirChangeNotification * pNotification);
-private:
-		long AddRef();		//	the window handle is reference counted
-		long Release();		//
-
-		static long s_nRefCnt;
-		static HWND s_hWnd; //there's only one window no matter how many instances of this class there are.... this means that all notifications are handled by the same thread.
-		static BOOL s_bRegisterWindow;
-		BOOL RegisterWindowClass(LPCTSTR szClassName);
-		BOOL CreateNotificationWindow();
-};
 
 class CDelayedNotificationThread : public CDelayedNotifier
 //
@@ -147,18 +124,19 @@ class CDirChangeNotification
 private:
 	CDirChangeNotification();//not implemented
 public:
-	explicit CDirChangeNotification(CDelayedDirectoryChangeHandler * pDelayedHandler, DWORD dwPartialPathOffset);
+	explicit CDirChangeNotification(CDelayedDirectoryChangeHandler * pDelayedHandler, HANDLE eventWhenDone);
 	~CDirChangeNotification();
 
 	//
 	//
-	void PostOn_FileAdded(LPCTSTR szFileName);
-	void PostOn_FileRemoved(LPCTSTR szFileName);
-	void PostOn_FileNameChanged(LPCTSTR szOldName, LPCTSTR szNewName);
-	void PostOn_FileModified(LPCTSTR szFileName);
-	void PostOn_ReadDirectoryChangesError(DWORD dwError, LPCTSTR szDirectoryName);
-	void PostOn_WatchStarted(DWORD dwError, LPCTSTR szDirectoryName);
-	void PostOn_WatchStopped(LPCTSTR szDirectoryName);
+	void PostOn_FileAdded(const std::wstring &szFileName);
+	void PostOn_FileRemoved(const std::wstring &szFileName);
+	void PostOn_FileNameChanged(const std::wstring &szOldName, const std::wstring &szNewName);
+	void PostOn_FileModified(const std::wstring &szFileName);
+	void PostOn_ReadDirectoryChangesError(DWORD dwError, const std::wstring &szDirectoryName);
+	void PostOn_WatchStarted(DWORD dwError, const std::wstring & szDirectoryName);
+	void PostOn_WatchStopped(const std::wstring & szDirectoryName);
+	void PostOn_UnknownChange();
 
 	void DispatchNotificationFunction();
 
@@ -168,6 +146,7 @@ public:
 								eOn_FileRemoved		= FILE_ACTION_REMOVED, 
 								eOn_FileModified	= FILE_ACTION_MODIFIED,
 								eOn_FileNameChanged	= FILE_ACTION_RENAMED_OLD_NAME,
+								eOn_UnknownChange,
 								eOn_ReadDirectoryChangesError,
 								eOn_WatchStarted,
 								eOn_WatchStopped
@@ -179,6 +158,9 @@ private:
 	friend class CDelayedDirectoryChangeHandler;
 	CDelayedDirectoryChangeHandler * m_pDelayedHandler;
 
+	CDirChangeNotification(const CDirChangeNotification &rhs);
+	CDirChangeNotification& operator=(const CDirChangeNotification &rhs);
+
 	//
 	//	Members to help implement DispatchNotificationFunction
 	//
@@ -186,13 +168,12 @@ private:
 
 	eFunctionToDispatch m_eFunctionToDispatch;
 	//Notification Data:
-	TCHAR *	m_szFileName1;//<-- is the szFileName parameter to On_FileAdded(),On_FileRemoved,On_FileModified(), and is szOldFileName to On_FileNameChanged(). Is also strDirectoryName to On_ReadDirectoryChangesError(), On_WatchStarted(), and On_WatchStopped()
-	TCHAR *	m_szFileName2;//<-- is the szNewFileName parameter to On_FileNameChanged()
+	std::wstring m_szFileName1;//<-- is the szFileName parameter to On_FileAdded(),On_FileRemoved,On_FileModified(), and is szOldFileName to On_FileNameChanged(). Is also strDirectoryName to On_ReadDirectoryChangesError(), On_WatchStarted(), and On_WatchStopped()
+	std::wstring m_szFileName2;//<-- is the szNewFileName parameter to On_FileNameChanged()
 	DWORD m_dwError;	  //<-- is the dwError parameter to On_WatchStarted(), and On_ReadDirectoryChangesError()
+	HANDLE m_notificationDoneEvent;
+
 	//
-
-	DWORD m_dwPartialPathOffset;//helps support FILTERS_CHECK_PARTIAL_PATH...not passed to any functions other than may be used during tests in CDelayedDirectoryChangeHandler::NotifyClientOfFileChange()
-
 
 	friend class CDirChangeNotification;
 	friend class CDirectoryChangeWatcher;
@@ -221,7 +202,7 @@ private:
 //	some functionality is lost, but such is the price.
 //
 
-typedef BOOL (STDAPICALLTYPE * FUNC_PatternMatchSpec)(LPCTSTR pszFile, LPCTSTR pszSpec);
+typedef BOOL (STDAPICALLTYPE * FUNC_PatternMatchSpec)(const std::wstring &pszFile, const std::wstring &pszSpec);
 
 class CDelayedDirectoryChangeHandler : public CDirectoryChangeHandler
 //
@@ -237,10 +218,10 @@ class CDelayedDirectoryChangeHandler : public CDirectoryChangeHandler
 //	Also supports the include and exclude filters for each directory
 //
 {
-private:
+private:	
 	CDelayedDirectoryChangeHandler();//not implemented.
 public:
-	CDelayedDirectoryChangeHandler( CDirectoryChangeHandler * pRealHandler, bool bAppHasGUI, LPCTSTR szIncludeFilter, LPCTSTR szExcludeFilter, DWORD dwFilterFlags);
+	CDelayedDirectoryChangeHandler( CDirectoryChangeHandler * pRealHandler);
 	virtual ~CDelayedDirectoryChangeHandler();
 
 	
@@ -253,45 +234,28 @@ public:
 
 protected:
 	//These functions are called when the directory to watch has had a change made to it
-	void On_FileAdded(const CString & strFileName);
-	void On_FileRemoved(const CString & strFileName);
-	void On_FileModified(const CString & strFileName);
-	void On_FileNameChanged(const CString & strOldFileName, const CString & strNewFileName);
-	void On_ReadDirectoryChangesError(DWORD dwError, const CString & strDirectoryName);
+	void On_FileAdded(const std::wstring & strFileName) override;
+	void On_FileRemoved(const std::wstring & strFileName) override;
+	void On_FileModified(const std::wstring & strFileName) override;
+	void On_FileNameChanged(const std::wstring & strOldFileName, const std::wstring & strNewFileName) override;
+	void On_UnknownChange() override;
+	void On_ReadDirectoryChangesError(DWORD dwError, const std::wstring & strDirectoryName) override;
 
-	void On_WatchStarted(DWORD dwError, const CString & strDirectoryName);
-	void On_WatchStopped(const CString & strDirectoryName);
+	void On_WatchStarted(DWORD dwError, const std::wstring& strDirectoryName) override;
+	void On_WatchStopped(const std::wstring& strDirectoryName) override;
 	
 
-	void SetChangedDirectoryName(const CString & strChangedDirName);
-	const CString & GetChangedDirectoryName()const;
+	void SetChangedDirectoryName(const std::wstring & strChangedDirName);
+	const std::wstring & GetChangedDirectoryName()const;
 
 	BOOL WaitForOnWatchStoppedDispatched();//see comments in .cpp
 
 
-	bool NotifyClientOfFileChange(CDirChangeNotification * pNot);
-
-	bool IncludeThisNotification(LPCTSTR szFileName);	//	based on file name.
-	bool ExcludeThisNotification(LPCTSTR szFileName);	//	Allows us to filter notifications
-														//
-	
-	
-
-	CDirChangeNotification * GetNotificationObject();
+	CDirChangeNotification * GetNotificationObject(HANDLE *outWaitEvent = NULL);
 	void DisposeOfNotification(CDirChangeNotification * pNotification);
 
 	CDelayedNotifier * m_pDelayNotifier;
 	CDirectoryChangeHandler * m_pRealHandler;	
-
-						// m_bAppHasGUI: 
-						//   This flag, if set to true, indicates that the app has a message
-	bool m_bAppHasGUI;	//	 pump, and that functions are dispatched to the main thread.
-						//   Otherwise, functions are dispatched to a separate worker thread.
-						//
-	DWORD m_dwFilterFlags;
-
-	DWORD m_dwPartialPathOffset; //helps support FILTERS_CHECK_PARTIAL_PATH
-	void SetPartialPathOffset(const CString & strWatchedDirName);
 
 	friend class CDirectoryChangeWatcher;
 	friend class CDirectoryChangeWatcher::CDirWatchInfo;
@@ -299,34 +263,12 @@ protected:
 private:
 	HANDLE m_hWatchStoppedDispatchedEvent;//supports WaitForOnWatchStoppedDispatched()
 
-	TCHAR * m_szIncludeFilter;		//	Supports the include
-	TCHAR * m_szExcludeFilter;		//	& exclude filters
-
 	//
 	//	Load PathMatchSpec dynamically because it's only supported if IE 4.0 or greater is
 	//	installed.
 	static HMODULE s_hShlwapi_dll;//for the PathMatchSpec() function
 	static BOOL s_bShlwapi_dllExists;//if on NT4.0 w/out IE 4.0 or greater, this'll be false
 	static long s_nRefCnt_hShlwapi;
-	static FUNC_PatternMatchSpec s_fpPatternMatchSpec;
-
-	BOOL _PathMatchSpec(LPCTSTR szPath, LPCTSTR szPattern);
-	BOOL InitializePathMatchFunc(LPCTSTR szIncludeFilter, LPCTSTR szExcludeFilter);
-	BOOL InitializePatterns(LPCTSTR szIncludeFilter, LPCTSTR szExcludeFilter);
-	void UninitializePathMatchFunc();
-
-	bool UsesRealPathMatchSpec() const;//are we using PathMatchSpec() or wildcmp()?
-
-	//note: if the PathMatchSpec function isn't found, wildcmp() is used instead.
-	//
-	//	to support multiple file specs separated by a semi-colon,
-	//	the include and exclude filters that are passed into the 
-	//	the constructor are parsed into separate strings
-	//	which are all checked in a loop.
-	//
-	int m_nNumIncludeFilterSpecs;
-	int m_nNumExcludeFilterSpecs;
-
 
 };
 

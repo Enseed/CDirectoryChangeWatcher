@@ -1,3 +1,10 @@
+#include "Precompiled.h"
+
+#include <Enseed/Generic/Math/Integer.h>
+#include <Wrapper/OSA/OSThread/OSThread.h>
+#include <boost/bind.hpp>
+#include <Enseed/Generic/Math/Integer.h>
+
 // DirectoryChanges.cpp: implementation of the CDirectoryChangeWatcher and CDirectoryChangeHandler classes.
 //
 ///////////////////////////////////////////////////////////////////
@@ -51,7 +58,7 @@
 		02/06/2002	  Fixed a bug that would cause an application to hang.
 						If ReadDirectoryChangesW was to fail during normal operation,
 						the short story is that the application would hang
-						when it called CDirectoryChangeWatcher::UnwatchDirectory(const CString & )
+						when it called CDirectoryChangeWatcher::UnwatchDirectory(const std::wstring & )
 
 						One way to reproduce this behavior on the old code
 						is to watch a directory using a UNC path, and then change the IP
@@ -92,9 +99,9 @@
 
 		02/09/2002	Added a parameter to CDirectoryChangeHandler::On_ReadDirectoryChangeError()
 
-					Added the parameter: const CString & strDirectoryName
+					Added the parameter: const std::wstring & strDirectoryName
 					The new signature is now:
-							virtual void CDirectoryChangeHandler::On_ReadDirectoryChangeError(DWORD dwError, const CString & strDirectoryName);
+							virtual void CDirectoryChangeHandler::On_ReadDirectoryChangeError(DWORD dwError, const std::wstring & strDirectoryName);
 
 					This new parameter gives you the name of the directory that the error occurred on.
 
@@ -106,8 +113,8 @@
 		04/25/2002	Added two new virtual functions to CDirectoryChangeHandler
 
 					Added:
-							On_WatchStarted(DWORD dwError, const CString & strDirectoryName)
-							On_WatchStopped(const CString & strDirectoryName);
+							On_WatchStarted(DWORD dwError, const std::wstring & strDirectoryName)
+							On_WatchStopped(const std::wstring & strDirectoryName);
 					See header file for details.
 
 		04/27/2002	Added new function to CDirectoryChangeHandler:
@@ -132,7 +139,7 @@
 										LPCTSTR szExcludeFilter
 					Both parameters are defaulted to NULL.
 					Signature is now:
-					CDirectoryChangeWatcher::WatchDirectory(const CString & strDirToWatch, 
+					CDirectoryChangeWatcher::WatchDirectory(const std::wstring & strDirToWatch, 
 															DWORD dwChangesToWatchFor, 
 															CDirectoryChangeHandler * pChangeHandler, 
 															BOOL bWatchSubDirs = FALSE,
@@ -190,15 +197,10 @@
 					
 ************************************************************/
 
-#include "stdafx.h"
+//#include "stdafx.h"
 #include "DirectoryChanges.h"
 #include "DelayedDirectoryChangeHandler.h"
 
-#ifdef _DEBUG
-#undef THIS_FILE
-static char THIS_FILE[]=__FILE__;
-#define new DEBUG_NEW
-#endif
 //
 //
 //	Fwd Declares & #define's
@@ -220,7 +222,7 @@ class CDelayedDirectoryChangeHandler;	//	Helps all notifications become handled 
 
 // Helper functions
 static BOOL	EnablePrivilege(LPCTSTR pszPrivName, BOOL fEnable = TRUE);
-static bool IsDirectory(const CString & strPath);
+static bool IsDirectory(const std::wstring & strPath);
 /////////////////////////////////////////////////////////////////////
 //	Helper functions.
 BOOL	EnablePrivilege(LPCTSTR pszPrivName, BOOL fEnable /*= TRUE*/) 
@@ -256,14 +258,14 @@ BOOL	EnablePrivilege(LPCTSTR pszPrivName, BOOL fEnable /*= TRUE*/)
 	return(fOk);
 }
 
-static bool IsDirectory(const CString & strPath)
+static bool IsDirectory(const std::wstring & strPath)
 //
 //  Returns: bool
 //		true if strPath is a path to a directory
 //		false otherwise.
 //
 {
-	DWORD dwAttrib	= GetFileAttributes( strPath );
+	DWORD dwAttrib	= GetFileAttributesW( strPath.c_str() );
 	return static_cast<bool>( ( dwAttrib != 0xffffffff 
 							&&	(dwAttrib & FILE_ATTRIBUTE_DIRECTORY)) );
 
@@ -316,13 +318,16 @@ FILE_NOTIFY_INFORMATION is defined in Winnt.h as:
 ********************************/
 {
 public:
-	CFileNotifyInformation( BYTE * lpFileNotifyInfoBuffer, DWORD dwBuffSize)
+	CFileNotifyInformation( BYTE * lpFileNotifyInfoBuffer, DWORD dwBuffLength /* data filled */, DWORD dwBuffSize /* total buffer size */)
 	: m_pBuffer( lpFileNotifyInfoBuffer ),
-	  m_dwBufferSize( dwBuffSize )
+	  m_dwBufferSize( dwBuffSize ),
+	  m_dwBufferLength(dwBuffLength)
 	{
 		ASSERT( lpFileNotifyInfoBuffer && dwBuffSize );
-		
-		m_pCurrentRecord = (PFILE_NOTIFY_INFORMATION) m_pBuffer;
+		if (VERIFY(m_dwBufferLength >= sizeof(PFILE_NOTIFY_INFORMATION)))
+			m_pCurrentRecord = (PFILE_NOTIFY_INFORMATION)m_pBuffer;
+		else
+			m_pCurrentRecord = nullptr;
 	}
 
 	
@@ -331,13 +336,14 @@ public:
 	BOOL CopyCurrentRecordToBeginningOfBuffer(OUT DWORD & ref_dwSizeOfCurrentRecord);
 
 	DWORD	GetAction() const;//gets the type of file change notifiation
-	CString GetFileName()const;//gets the file name from the FILE_NOTIFY_INFORMATION record
-	CString GetFileNameWithPath(const CString & strRootPath) const;//same as GetFileName() only it prefixes the strRootPath into the file name
+	std::wstring GetFileName()const;//gets the file name from the FILE_NOTIFY_INFORMATION record
+	std::wstring GetFileNameWithPath(const std::wstring & strRootPath) const;//same as GetFileName() only it prefixes the strRootPath into the file name
 
 	
 protected:
 	BYTE * m_pBuffer;//<--all of the FILE_NOTIFY_INFORMATION records 'live' in the buffer this points to...
 	DWORD  m_dwBufferSize;
+	DWORD  m_dwBufferLength;
 	PFILE_NOTIFY_INFORMATION m_pCurrentRecord;//this points to the current FILE_NOTIFY_INFORMATION record in m_pBuffer
 	
 };
@@ -359,7 +365,7 @@ BOOL CFileNotifyInformation::GetNextNotifyInformation()
 
 		ASSERT( (DWORD)((BYTE*)m_pCurrentRecord - m_pBuffer) < m_dwBufferSize);//make sure we haven't gone too far
 
-		if( (DWORD)((BYTE*)m_pCurrentRecord - m_pBuffer) > m_dwBufferSize )
+		if( (DWORD)((BYTE*)m_pCurrentRecord - m_pBuffer) >= m_dwBufferSize )
 		{
 			//we've gone too far.... this data is hosed.
 			//
@@ -408,7 +414,7 @@ BOOL CFileNotifyInformation::CopyCurrentRecordToBeginningOfBuffer(OUT DWORD & re
 		}
 		__except(EXCEPTION_EXECUTE_HANDLER)
 		{
-			TRACE(_T("EXCEPTION!  CFileNotifyInformation::CopyCurrentRecordToBeginningOfBuffer() -- probably because bytes overlapped in a call to memcpy()"));
+			TRACEF(_T("EXCEPTION!  CFileNotifyInformation::CopyCurrentRecordToBeginningOfBuffer() -- probably because bytes overlapped in a call to memcpy()"));
 			bRetVal = FALSE;
 		}
 	}
@@ -419,13 +425,13 @@ BOOL CFileNotifyInformation::CopyCurrentRecordToBeginningOfBuffer(OUT DWORD & re
 
 DWORD CFileNotifyInformation::GetAction() const
 { 
-	ASSERT( m_pCurrentRecord );
+	//ASSERT( m_pCurrentRecord );  // m_pCurrentRecord will be null if the change is unknown
 	if( m_pCurrentRecord )
 		return m_pCurrentRecord->Action;
 	return 0UL;
 }
 
-CString CFileNotifyInformation::GetFileName() const
+std::wstring CFileNotifyInformation::GetFileName() const
 {
 	//
 	//BUG FIX:
@@ -438,27 +444,28 @@ CString CFileNotifyInformation::GetFileName() const
 		memcpy(	wcFileName, 
 				m_pCurrentRecord->FileName, 
 				//min( MAX_PATH, m_pCurrentRecord->FileNameLength) <-- buggy line
-				min( (MAX_PATH * sizeof(WCHAR)), m_pCurrentRecord->FileNameLength));
+				min( (MAX_PATH * sizeof(WCHAR)), m_pCurrentRecord->FileNameLength)
+				);
 		
 
-		return CString( wcFileName );
+		return std::wstring( wcFileName );
 	}
-	return CString();
+	return std::wstring();
 }		
 
-static inline bool HasTrailingBackslash(const CString & str )
+static inline bool HasTrailingBackslash(const std::wstring & str )
 {
-	if( str.GetLength() > 0 
-	&&	str[ str.GetLength() - 1 ] == _T('\\') )
+	if( str.length() > 0 
+	&&	str[ str.length() - 1 ] == _T('\\') )
 		return true;
 	return false;
 }
-CString CFileNotifyInformation::GetFileNameWithPath(const CString & strRootPath) const
+std::wstring CFileNotifyInformation::GetFileNameWithPath(const std::wstring & strRootPath) const
 {
-	CString strFileName( strRootPath );
+	std::wstring strFileName( strRootPath );
 	//if( strFileName.Right(1) != _T("\\") )
 	if( !HasTrailingBackslash( strRootPath ) )
-		strFileName += _T("\\");
+		strFileName += L"\\";
 
 	strFileName += GetFileName();
 	return strFileName;
@@ -494,9 +501,9 @@ CPrivilegeEnabler::CPrivilegeEnabler()
 	{
 		if( !EnablePrivilege(arPrivelegeNames[i], TRUE) )
 		{
-			TRACE(_T("Unable to enable privilege: %s	--	GetLastError(): %d\n"), arPrivelegeNames[i], GetLastError());
-			TRACE(_T("CDirectoryChangeWatcher notifications may not work as intended due to insufficient access rights/process privileges.\n"));
-			TRACE(_T("File: %s Line: %d\n"), _T(__FILE__), __LINE__);
+			TRACEF(_T("Unable to enable privilege: %s	--	GetLastError(): %d\n"), arPrivelegeNames[i], GetLastError());
+			TRACEF(_T("CDirectoryChangeWatcher notifications may not work as intended due to insufficient access rights/process privileges.\n"));
+			TRACEF(_T("File: %s Line: %d\n"), _T(__FILE__), __LINE__);
 		}
 	}
 }
@@ -548,9 +555,8 @@ long CDirectoryChangeHandler::CurRefCnt()const
 
 BOOL CDirectoryChangeHandler::UnwatchDirectory()
 {
-	CSingleLock lock(&m_csWatcher, TRUE);	
-	ASSERT( lock.IsLocked() );
-	
+	CCriticalSection::CSingleLock lock(&m_csWatcher);
+
 	if( m_pDirChangeWatcher )
 		return m_pDirChangeWatcher->UnwatchDirectory( this );
 	return TRUE;
@@ -559,12 +565,12 @@ BOOL CDirectoryChangeHandler::UnwatchDirectory()
 long  CDirectoryChangeHandler::ReferencesWatcher(CDirectoryChangeWatcher * pDirChangeWatcher)
 {
 	ASSERT( pDirChangeWatcher );
-	CSingleLock lock(&m_csWatcher, TRUE);
+	CCriticalSection::CSingleLock lock(&m_csWatcher);
 	if( m_pDirChangeWatcher 
 	&&  m_pDirChangeWatcher != pDirChangeWatcher )
 	{
-		TRACE(_T("CDirectoryChangeHandler...is becoming used by a different CDirectoryChangeWatcher!\n"));
-		TRACE(_T("Directories being handled by this object will now be unwatched.\nThis object is now being used to ")
+		TRACEF(_T("CDirectoryChangeHandler...is becoming used by a different CDirectoryChangeWatcher!\n"));
+		TRACEF(_T("Directories being handled by this object will now be unwatched.\nThis object is now being used to ")
 			  _T("handle changes to a directory watched by different CDirectoryChangeWatcher object, probably on a different directory"));
 		
 		if( UnwatchDirectory() )
@@ -594,7 +600,7 @@ long  CDirectoryChangeHandler::ReferencesWatcher(CDirectoryChangeWatcher * pDirC
 long CDirectoryChangeHandler::ReleaseReferenceToWatcher(CDirectoryChangeWatcher * pDirChangeWatcher)
 {
 	ASSERT( m_pDirChangeWatcher == pDirChangeWatcher );
-	CSingleLock lock(&m_csWatcher, TRUE);
+	CCriticalSection::CSingleLock lock(&m_csWatcher);
 	long nRef;
 	if( (nRef = InterlockedDecrement(&m_nWatcherRefCnt)) <= 0L )
 	{
@@ -612,110 +618,64 @@ long CDirectoryChangeHandler::ReleaseReferenceToWatcher(CDirectoryChangeWatcher 
 //	Default implmentations for CDirectoryChangeHandler's virtual functions.
 //
 //
-void CDirectoryChangeHandler::On_FileAdded(const CString & strFileName)
+void CDirectoryChangeHandler::On_FileAdded(const std::wstring & strFileName)
 { 
-	TRACE(_T("The following file was added: %s\n"), strFileName);
+	TRACEF(_T("The following file was added: %S\n"), strFileName.c_str());
 }
 
-void CDirectoryChangeHandler::On_FileRemoved(const CString & strFileName)
+void CDirectoryChangeHandler::On_FileRemoved(const std::wstring & strFileName)
 {
-	TRACE(_T("The following file was removed: %s\n"), strFileName);
+	TRACEF(_T("The following file was removed: %S\n"), strFileName.c_str());
 }
 
-void CDirectoryChangeHandler::On_FileModified(const CString & strFileName)
+void CDirectoryChangeHandler::On_FileModified(const std::wstring & strFileName)
 {
-	TRACE(_T("The following file was modified: %s\n"), strFileName);
+	TRACEF(_T("The following file was modified: %S\n"), strFileName.c_str());
 }
 
-void CDirectoryChangeHandler::On_FileNameChanged(const CString & strOldFileName, const CString & strNewFileName)
+void CDirectoryChangeHandler::On_FileNameChanged(const std::wstring & strOldFileName, const std::wstring & strNewFileName)
 {
-	TRACE(_T("The file %s was RENAMED to %s\n"), strOldFileName, strNewFileName);
+	TRACEF(_T("The file %S was RENAMED to %S\n"), strOldFileName.c_str(), strNewFileName.c_str());
 }
-void CDirectoryChangeHandler::On_ReadDirectoryChangesError(DWORD dwError, const CString & strDirectoryName)
+
+void CDirectoryChangeHandler::On_UnknownChange()
 {
-	TRACE(_T("WARNING!!!!!\n") );
-	TRACE(_T("An error has occurred on a watched directory!\n"));
-	TRACE(_T("This directory has become unwatched! -- %s \n"), strDirectoryName);
-	TRACE(_T("ReadDirectoryChangesW has failed! %d"), dwError);
+	TRACEF(_T("An unknown change occured\n"));
+}
+
+void CDirectoryChangeHandler::On_ReadDirectoryChangesError(DWORD dwError, const std::wstring & strDirectoryName)
+{
+	TRACEF(_T("WARNING!!!!!\n") );
+	TRACEF(_T("An error has occurred on a watched directory!\n"));
+	TRACEF(_T("This directory has become unwatched! -- %S \n"), strDirectoryName.c_str());
+	TRACEF(_T("ReadDirectoryChangesW has failed! %d"), dwError);
 	ASSERT( FALSE );//you should override this function no matter what. an error will occur someday.
 }
 
-void CDirectoryChangeHandler::On_WatchStarted(DWORD dwError, const CString & strDirectoryName)
+void CDirectoryChangeHandler::On_WatchStarted(DWORD dwError, const std::wstring& strDirectoryName)
 {	
 	if( dwError == 0 )
-		TRACE(_T("A watch has begun on the following directory: %s\n"), strDirectoryName);
+		TRACEF(_T("A watch has begun on the following directory: %S\n"), strDirectoryName.c_str());
 	else
-		TRACE(_T("A watch failed to start on the following directory: (Error: %d) %s\n"),dwError, strDirectoryName);
+		TRACEF(_T("A watch failed to start on the following directory: (Error: %d) %S\n"),dwError, strDirectoryName.c_str());
 }
 
-void CDirectoryChangeHandler::On_WatchStopped(const CString & strDirectoryName)
+void CDirectoryChangeHandler::On_WatchStopped(const std::wstring &strDirectoryName)
 {
-	TRACE(_T("The watch on the following directory has stopped: %s\n"), strDirectoryName);
+	TRACEF(_T("The watch on the following directory has stopped: %S\n"), strDirectoryName.c_str());
 }
 
-bool CDirectoryChangeHandler::On_FilterNotification(DWORD /*dwNotifyAction*/, LPCTSTR /*szFileName*/, LPCTSTR /*szNewFileName*/)
-//
-//	bool On_FilterNotification(DWORD dwNotifyAction, LPCTSTR szFileName, LPCTSTR szNewFileName);
-//
-//	This function gives your class a chance to filter unwanted notifications.
-//
-//	PARAMETERS: 
-//			DWORD	dwNotifyAction	-- specifies the event to filter
-//			LPCTSTR szFileName		-- specifies the name of the file for the event.
-//			LPCTSTR szNewFileName	-- specifies the new file name of a file that has been renamed.
-//
-//	RETURN VALUE:
-//			return true from this function, and you will receive the notification.
-//			return false from this function, and your class will NOT receive the notification.
-//
-//	Valid values of dwNotifyAction:
-//		FILE_ACTION_ADDED			-- On_FileAdded() is about to be called.
-//		FILE_ACTION_REMOVED			-- On_FileRemoved() is about to be called.
-//		FILE_ACTION_MODIFIED		-- On_FileModified() is about to be called.
-//		FILE_ACTION_RENAMED_OLD_NAME-- On_FileNameChanged() is about to be call.
-//
-//	  
-//	NOTE:  When the value of dwNotifyAction is FILE_ACTION_RENAMED_OLD_NAME,
-//			szFileName will be the old name of the file, and szNewFileName will
-//			be the new name of the renamed file.
-//
-//  The default implementation always returns true, indicating that all notifications will 
-//	be sent.
-//	
-{
-	return true;
-}
-
-void CDirectoryChangeHandler::SetChangedDirectoryName(const CString & strChangedDirName)
+void CDirectoryChangeHandler::SetChangedDirectoryName(const std::wstring & strChangedDirName)
 {
 	m_strChangedDirectoryName = strChangedDirName;
 }
 ////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////
 
-CDirectoryChangeWatcher::CDirectoryChangeWatcher(bool bAppHasGUI /*= true*/, DWORD dwFilterFlags/*=FILTERS_CHECK_FILE_NAME_ONLY*/)
+CDirectoryChangeWatcher::CDirectoryChangeWatcher()
 : m_hCompPort( NULL )
  ,m_hThread( NULL )
- ,m_dwThreadID( 0UL )
- ,m_bAppHasGUI( bAppHasGUI )
- ,m_dwFilterFlags( dwFilterFlags == 0? FILTERS_DEFAULT_BEHAVIOR : dwFilterFlags)
-{
-	//NOTE:  
-	//	The bAppHasGUI variable indicates that you have a message pump associated
-	//	with the main thread(or the thread that first calls CDirectoryChangeWatcher::WatchDirectory() ).
-	//	Directory change notifications are dispatched to your main thread.
-	//	
-	//	If your app doesn't have a gui, then pass false.  Doing so causes a worker thread
-	//	to be created that implements a message pump where it dispatches/executes the notifications.
-	//  It's ok to pass false even if your app does have a GUI.
-	//	Passing false is required for Console applications, or applications without a message pump.
-	//	Note that notifications are fired in a worker thread.
-	//
-
-	//NOTE:
-	//
-	//
-}
+{}
 
 CDirectoryChangeWatcher::~CDirectoryChangeWatcher()
 {
@@ -729,23 +689,8 @@ CDirectoryChangeWatcher::~CDirectoryChangeWatcher()
 	}
 }
 
-DWORD CDirectoryChangeWatcher::SetFilterFlags(DWORD dwFilterFlags)
-//
-//	SetFilterFlags()
-//	
-//	sets filter behavior for directories watched AFTER this function has been called.
-//
-//
-//
-{
-	DWORD dwOld = m_dwFilterFlags;
-	m_dwFilterFlags = dwFilterFlags;
-	if( m_dwFilterFlags == 0 )
-		m_dwFilterFlags = FILTERS_DEFAULT_BEHAVIOR;//the default.
-	return dwOld;
-}
 
-BOOL CDirectoryChangeWatcher::IsWatchingDirectory(const CString & strDirName)const
+BOOL CDirectoryChangeWatcher::IsWatchingDirectory(const std::wstring & strDirName)const
 /*********************************************
   Determines whether or not a directory is being watched
 
@@ -758,8 +703,8 @@ BOOL CDirectoryChangeWatcher::IsWatchingDirectory(const CString & strDirName)con
 			"C:\\Temp\\"
 **********************************************/
 {
-	CSingleLock lock( const_cast<CCriticalSection*>(&m_csDirWatchInfo), TRUE);
-	ASSERT( lock.IsLocked() );
+	CCriticalSection::CSingleLock lock( const_cast<CCriticalSection*>(&m_csDirWatchInfo));
+
 	int i;
 	if( GetDirWatchInfo(strDirName, i) )
 		return TRUE;
@@ -768,9 +713,9 @@ BOOL CDirectoryChangeWatcher::IsWatchingDirectory(const CString & strDirName)con
 
 int	CDirectoryChangeWatcher::NumWatchedDirectories()const
 {
-	CSingleLock lock(const_cast<CCriticalSection*>(&m_csDirWatchInfo), TRUE);
-	ASSERT( lock.IsLocked() );
-	int nCnt(0),max = m_DirectoriesToWatch.GetSize();
+	CCriticalSection::CSingleLock lock(const_cast<CCriticalSection*>(&m_csDirWatchInfo));
+
+	int nCnt(0),max = (int)m_DirectoriesToWatch.size();
 	for(int i(0); i < max; ++i)
 	{
 		if( m_DirectoriesToWatch[i] != NULL )//array may contain NULL elements.
@@ -780,7 +725,7 @@ int	CDirectoryChangeWatcher::NumWatchedDirectories()const
 	return nCnt;
 }
 
-DWORD CDirectoryChangeWatcher::WatchDirectory(const CString & strDirToWatch, 
+DWORD CDirectoryChangeWatcher::WatchDirectory(const std::wstring & strDirToWatch, 
 									   DWORD dwChangesToWatchFor, 
 									   CDirectoryChangeHandler * pChangeHandler,
 									   BOOL bWatchSubDirs /*=FALSE*/,
@@ -788,14 +733,14 @@ DWORD CDirectoryChangeWatcher::WatchDirectory(const CString & strDirToWatch,
 									   LPCTSTR szExcludeFilter /*=NULL*/
 									   )
 /*************************************************************
-FUNCTION:	WatchDirectory(const CString & strDirToWatch,   --the name of the directory to watch
+FUNCTION:	WatchDirectory(const std::wstring & strDirToWatch,   --the name of the directory to watch
 						   DWORD dwChangesToWatchFor, --the changes to watch for see dsk docs..for ReadDirectoryChangesW
 						   CDirectoryChangeHandler * pChangeHandler -- handles changes in specified directory
 						   BOOL bWatchSubDirs      --specified to watch sub directories of the directory that you want to watch
 						   )
 
 PARAMETERS:
-		const CString & strDirToWatch -- specifies the path of the directory to watch.
+		const std::wstring & strDirToWatch -- specifies the path of the directory to watch.
 		DWORD dwChangesToWatchFor	-- specifies flags to be passed to ReadDirectoryChangesW()
 		CDirectoryChangeHandler *	-- ptr to an object which will handle notifications of file changes.
 		BOOL bWatchSubDirs			-- specifies to watch subdirectories.
@@ -841,23 +786,23 @@ PARAMETERS:
 {
 	ASSERT( dwChangesToWatchFor != 0);
 
-	if( strDirToWatch.IsEmpty()
+	if( strDirToWatch.empty()
 	||  dwChangesToWatchFor == 0 
 	||  pChangeHandler == NULL )
 	{
-		TRACE(_T("ERROR: You've passed invalid parameters to CDirectoryChangeWatcher::WatchDirectory()\n"));
+		TRACEF(_T("ERROR: You've passed invalid parameters to CDirectoryChangeWatcher::WatchDirectory()\n"));
 		::SetLastError(ERROR_INVALID_PARAMETER);
 		return ERROR_INVALID_PARAMETER;
 	}
 
 	
 	//double check that it's really a directory
-	if( !IsDirectory( strDirToWatch ) )
-	{
-		TRACE(_T("ERROR: CDirectoryChangeWatcher::WatchDirectory() -- %s is not a directory!\n"), strDirToWatch);
-		::SetLastError(ERROR_BAD_PATHNAME);
-		return ERROR_BAD_PATHNAME;
-	}
+// 	if( !IsDirectory( strDirToWatch ) )
+// 	{
+// 		TRACEF(_T("ERROR: CDirectoryChangeWatcher::WatchDirectory() -- %s is not a directory!\n"), strDirToWatch);
+// 		::SetLastError(ERROR_BAD_PATHNAME);
+// 		return ERROR_BAD_PATHNAME;
+// 	}
 
 	//double check that this directory is not already being watched....
 	//if it is, then unwatch it before restarting it...
@@ -875,7 +820,7 @@ PARAMETERS:
 	CPrivilegeEnabler::Instance();
 	//
 	//open the directory to watch....
-	HANDLE hDir = CreateFile(strDirToWatch, 
+	HANDLE hDir = CreateFileW(strDirToWatch.c_str(), 
 								FILE_LIST_DIRECTORY, 
 								FILE_SHARE_READ | FILE_SHARE_WRITE ,//| FILE_SHARE_DELETE, <-- removing FILE_SHARE_DELETE prevents the user or someone else from renaming or deleting the watched directory. This is a good thing to prevent.
 								NULL, //security attributes
@@ -886,16 +831,16 @@ PARAMETERS:
 	if( hDir == INVALID_HANDLE_VALUE )
 	{
 		DWORD dwError = GetLastError();
-		TRACE(_T("CDirectoryChangeWatcher::WatchDirectory() -- Couldn't open directory for monitoring. %d\n"), dwError);
+		TRACEF(_T("CDirectoryChangeWatcher::WatchDirectory() -- Couldn't open directory for monitoring. %d\n"), dwError);
 		::SetLastError(dwError);//who knows if TRACE will cause GetLastError() to return success...probably won't, but set it manually just for fun.
 		return dwError;
 	}
 	//opened the dir!
 	
-	CDirWatchInfo * pDirInfo = new CDirWatchInfo( hDir, strDirToWatch, pChangeHandler, dwChangesToWatchFor, bWatchSubDirs, m_bAppHasGUI, szIncludeFilter, szExcludeFilter, m_dwFilterFlags);
+	CDirWatchInfo * pDirInfo = new CDirWatchInfo( hDir, strDirToWatch, pChangeHandler, dwChangesToWatchFor, bWatchSubDirs);
 	if( !pDirInfo )
 	{
-		TRACE(_T("WARNING: Couldn't allocate a new CDirWatchInfo() object --- File: %s Line: %d\n"), _T( __FILE__ ), __LINE__);
+		TRACEF(_T("WARNING: Couldn't allocate a new CDirWatchInfo() object --- File: %s Line: %d\n"), _T( __FILE__ ), __LINE__);
 		CloseHandle( hDir );
 		::SetLastError(ERROR_OUTOFMEMORY);
 		return ERROR_OUTOFMEMORY;
@@ -910,14 +855,14 @@ PARAMETERS:
 										0);
 	if( m_hCompPort == NULL )
 	{
-		TRACE(_T("ERROR -- Unable to create I/O Completion port! GetLastError(): %d File: %s Line: %d"), GetLastError(), _T( __FILE__ ), __LINE__ );
+		TRACEF(_T("ERROR -- Unable to create I/O Completion port! GetLastError(): %d File: %s Line: %d"), GetLastError(), _T( __FILE__ ), __LINE__ );
 		DWORD dwError = GetLastError();
 		pDirInfo->DeleteSelf( NULL );
 		::SetLastError(dwError);//who knows what the last error will be after i call pDirInfo->DeleteSelf(), so set it just to make sure
 		return dwError;
 	}
 	else
-	{//completion port created/directory associated w/ it successfully
+	{	//completion port created/directory associated w/ it successfully
 
 		//if the thread isn't running start it....
 		//when the thread starts, it will call ReadDirectoryChangesW and wait 
@@ -925,19 +870,25 @@ PARAMETERS:
 		if( m_hThread == NULL )
 		{
 			//start the thread
-			CWinThread * pThread = AfxBeginThread(MonitorDirectoryChanges, this);
-			if( !pThread )
+			OSThread *pThread = new OSThread("DirectoryWatcherThread");
+			if(pThread)
+			{
+				if (pThread->start(boost::bind(MonitorDirectoryChanges, this)) != OSThread::kNoErr)
+				{
+					delete pThread;
+					pThread = NULL;
+				}
+
+			}
+			if (!pThread)
 			{//couldn't create the thread!
-				TRACE(_T("CDirectoryChangeWatcher::WatchDirectory()-- AfxBeginThread failed!\n"));
+				TRACEF(_T("CDirectoryChangeWatcher::WatchDirectory()-- AfxBeginThread failed!\n"));
 				pDirInfo->DeleteSelf( NULL );
 				return (GetLastError() == ERROR_SUCCESS)? ERROR_MAX_THRDS_REACHED : GetLastError();
 			}
 			else
 			{
-				m_hThread	 = pThread->m_hThread;
-				m_dwThreadID = pThread->m_nThreadID;
-				pThread->m_bAutoDelete = TRUE;//pThread is deleted when thread ends....it's TRUE by default(for CWinThread ptrs returned by AfxBeginThread(threadproc, void*)), but just makin sure.
-				
+				m_hThread	 = pThread;
 			}
 		}
 		if( m_hThread != NULL )
@@ -948,13 +899,13 @@ PARAMETERS:
 
 		   if( dwStarted != ERROR_SUCCESS )
 		   {//there was a problem!
-			   TRACE(_T("Unable to watch directory: %s -- GetLastError(): %d\n"), dwStarted);
+			   TRACEF(_T("Unable to watch directory: %S -- GetLastError(): %d\n"), strDirToWatch.c_str(), dwStarted);
 			   pDirInfo->DeleteSelf( NULL );
 				::SetLastError(dwStarted);//I think this'll set the Err object in a VB app.....
 			   return dwStarted;
 		   }
 		   else
-		   {//ReadDirectoryChangesW was successfull!
+		   {	//ReadDirectoryChangesW was successful!
 				//add the directory info to the first empty slot in the array
 
 				//associate the pChangeHandler with this object
@@ -990,32 +941,30 @@ BOOL CDirectoryChangeWatcher::UnwatchAllDirectories()
 	{
 		ASSERT( m_hCompPort != NULL );
 		
-		CSingleLock lock( &m_csDirWatchInfo, TRUE);
-		ASSERT( lock.IsLocked() );
+		CCriticalSection::CSingleLock lock( &m_csDirWatchInfo);
 
 		CDirWatchInfo * pDirInfo;
 		//Unwatch each of the watched directories
 		//and delete the CDirWatchInfo associated w/ that directory...
-		int max = m_DirectoriesToWatch.GetSize();
+		size_t max = m_DirectoriesToWatch.size();
 		for(int i = 0; i < max; ++i)
 		{
 			if( (pDirInfo = m_DirectoriesToWatch[i]) != NULL )
 			{
 				VERIFY( pDirInfo->UnwatchDirectory( m_hCompPort ) );
 
-				m_DirectoriesToWatch.SetAt(i, NULL)	;
+				m_DirectoriesToWatch[i] = NULL	;
 				pDirInfo->DeleteSelf(this);
 			}
 			
 		}
-		m_DirectoriesToWatch.RemoveAll();
+		m_DirectoriesToWatch.clear();
 		//kill off the thread
 		PostQueuedCompletionStatus(m_hCompPort, 0, 0, NULL);//The thread will catch this and exit the thread
 		//wait for it to exit
-		WaitForSingleObject(m_hThread, INFINITE);
+		m_hThread->join();
 		//CloseHandle( m_hThread );//Since thread was started w/ AfxBeginThread() this handle is closed automatically, closing it again will raise an exception
 		m_hThread = NULL;
-		m_dwThreadID = 0UL;		
 
 		//close the completion port...
 		CloseHandle( m_hCompPort );
@@ -1030,9 +979,9 @@ BOOL CDirectoryChangeWatcher::UnwatchAllDirectories()
 		//make sure that there aren't any 
 		//CDirWatchInfo objects laying around... they should have all been destroyed 
 		//and removed from the array m_DirectoriesToWatch
-		if( m_DirectoriesToWatch.GetSize() > 0 )
+		if( m_DirectoriesToWatch.size() > 0 )
 		{
-			for(int i = 0; i < m_DirectoriesToWatch.GetSize(); ++i)
+			for(int i = 0; i < m_DirectoriesToWatch.size(); ++i)
 			{
 				ASSERT( m_DirectoriesToWatch[i] == NULL );
 			}
@@ -1042,9 +991,9 @@ BOOL CDirectoryChangeWatcher::UnwatchAllDirectories()
 	return FALSE;
 }
 
-BOOL CDirectoryChangeWatcher::UnwatchDirectory(const CString & strDirToStopWatching)
+BOOL CDirectoryChangeWatcher::UnwatchDirectory(const std::wstring & strDirToStopWatching)
 /***************************************************************
-FUNCTION:	UnwatchDirectory(const CString & strDirToStopWatching -- if this directory is being watched, the watch is stopped
+FUNCTION:	UnwatchDirectory(const std::wstring & strDirToStopWatching -- if this directory is being watched, the watch is stopped
 
 ****************************************************************/
 {
@@ -1054,10 +1003,9 @@ FUNCTION:	UnwatchDirectory(const CString & strDirToStopWatching -- if this direc
 
 	if( m_hCompPort != NULL )//The io completion port must be open
 	{
-		ASSERT( !strDirToStopWatching.IsEmpty() );
+		ASSERT( !strDirToStopWatching.empty() );
 		
-		CSingleLock lock(&m_csDirWatchInfo, TRUE);
-		ASSERT( lock.IsLocked() );	
+		CCriticalSection::CSingleLock lock(&m_csDirWatchInfo);
 		int nIdx = -1;
 		CDirWatchInfo * pDirInfo = GetDirWatchInfo(strDirToStopWatching, nIdx);
 		if( pDirInfo != NULL
@@ -1068,7 +1016,7 @@ FUNCTION:	UnwatchDirectory(const CString & strDirToStopWatching -- if this direc
 			VERIFY( pDirInfo->UnwatchDirectory( m_hCompPort ) );
 
 			//cleanup the object used to watch the directory
-			m_DirectoriesToWatch.SetAt(nIdx, NULL);
+			m_DirectoriesToWatch[nIdx] = NULL;
 			pDirInfo->DeleteSelf(this);
 			bRetVal = TRUE;
 		}
@@ -1094,10 +1042,9 @@ BOOL CDirectoryChangeWatcher::UnwatchDirectory(CDirectoryChangeHandler * pChange
 {
 	ASSERT( pChangeHandler );
 
-	CSingleLock lock(&m_csDirWatchInfo, TRUE);
+	CCriticalSection::CSingleLock lock(&m_csDirWatchInfo);
 	
-	ASSERT( lock.IsLocked() );
-	
+
 	int nUnwatched = 0;
 	int nIdx = -1;
 	CDirWatchInfo * pDirInfo;
@@ -1110,7 +1057,7 @@ BOOL CDirectoryChangeWatcher::UnwatchDirectory(CDirectoryChangeHandler * pChange
 		VERIFY( pDirInfo->UnwatchDirectory( m_hCompPort ) );
 
 		nUnwatched++;
-		m_DirectoriesToWatch.SetAt(nIdx, NULL);
+		m_DirectoriesToWatch[nIdx] = NULL;
 		pDirInfo->DeleteSelf(this);	
 	}
 	return (BOOL)(nUnwatched != 0);
@@ -1124,13 +1071,12 @@ BOOL CDirectoryChangeWatcher::UnwatchDirectoryBecauseOfError(CDirWatchInfo * pWa
 //	
 {
 	ASSERT( pWatchInfo );
-	ASSERT( m_dwThreadID == GetCurrentThreadId() );//this should be called from the worker thread only.
+	ASSERT( m_hThread->id() == OSThread::currentThreadID() );//this should be called from the worker thread only.
 	BOOL bRetVal = FALSE;
 	if( pWatchInfo )
 	{
-		CSingleLock lock(&m_csDirWatchInfo, TRUE);
+		CCriticalSection::CSingleLock lock(&m_csDirWatchInfo);
 		
-		ASSERT( lock.IsLocked() );
 		int nIdx = -1;
 		if( GetDirWatchInfo(pWatchInfo, nIdx) == pWatchInfo )
 		{
@@ -1139,7 +1085,7 @@ BOOL CDirectoryChangeWatcher::UnwatchDirectoryBecauseOfError(CDirWatchInfo * pWa
 			//
 			//	Remove this CDirWatchInfo object from the list of watched directories.
 			//
-			m_DirectoriesToWatch.SetAt(nIdx, NULL);//mark the space as free for the next watch...
+			m_DirectoriesToWatch[nIdx] = NULL;//mark the space as free for the next watch...
 
 			//
 			//	and delete it...
@@ -1162,12 +1108,12 @@ int	CDirectoryChangeWatcher::AddToWatchInfo(CDirectoryChangeWatcher::CDirWatchIn
 //
 //	Add the ptr to the first non-null slot in the array.
 {
-	CSingleLock lock( &m_csDirWatchInfo, TRUE);
-	ASSERT( lock.IsLocked() );
+	CCriticalSection::CSingleLock lock( &m_csDirWatchInfo);
 	
 	//first try to add it to the first empty slot in m_DirectoriesToWatch
-	int max = m_DirectoriesToWatch.GetSize();
-	for(int i = 0; i < max; ++i)
+	int max = (int)m_DirectoriesToWatch.size();
+	int i = 0;
+	for(i = 0; i < max; ++i)
 	{
 		if( m_DirectoriesToWatch[i] == NULL )
 		{
@@ -1178,14 +1124,8 @@ int	CDirectoryChangeWatcher::AddToWatchInfo(CDirectoryChangeWatcher::CDirWatchIn
 	if( i == max )
 	{
 		// there where no empty slots, add it to the end of the array
-		try{
-			i = m_DirectoriesToWatch.Add( pWatchInfo );
-		}
-		catch(CMemoryException * e){
-			e->ReportError();
-			e->Delete();//??? delete this? I thought CMemoryException objects where pre allocated in mfc? -- sample code in msdn does, so will i
-			i = -1;
-		}
+		m_DirectoriesToWatch.push_back( pWatchInfo );
+		i = max;
 	}
 
 	return (BOOL)(i != -1);
@@ -1194,19 +1134,18 @@ int	CDirectoryChangeWatcher::AddToWatchInfo(CDirectoryChangeWatcher::CDirWatchIn
 //
 //	functions for retrieving the directory watch info based on different parameters
 //
-CDirectoryChangeWatcher::CDirWatchInfo * CDirectoryChangeWatcher::GetDirWatchInfo(const CString & strDirName, int & ref_nIdx)const
+CDirectoryChangeWatcher::CDirWatchInfo * CDirectoryChangeWatcher::GetDirWatchInfo(const std::wstring & strDirName, int & ref_nIdx)const
 {
-	if( strDirName.IsEmpty() )// can't be watching a directory if it's you don't pass in the name of it...
+	if( strDirName.empty() )// can't be watching a directory if it's you don't pass in the name of it...
 		return FALSE;		  //
 	
-	CSingleLock lock(const_cast<CCriticalSection*>(&m_csDirWatchInfo), TRUE);
+	CCriticalSection::CSingleLock lock(const_cast<CCriticalSection*>(&m_csDirWatchInfo));
 
-	int max = m_DirectoriesToWatch.GetSize();
+	size_t max = m_DirectoriesToWatch.size();
 	CDirWatchInfo * p = NULL;
 	for(int i = 0; i < max; ++i )
 	{
-		if( (p = m_DirectoriesToWatch[i]) != NULL
-		&&	p->m_strDirName.CompareNoCase( strDirName ) == 0 )
+		if( (p = m_DirectoriesToWatch[i]) != NULL && p->m_strDirName == strDirName)
 		{
 			ref_nIdx = i;
 			return p;
@@ -1220,8 +1159,8 @@ CDirectoryChangeWatcher::CDirWatchInfo * CDirectoryChangeWatcher::GetDirWatchInf
 {
 	ASSERT( pWatchInfo != NULL );
 
-	CSingleLock lock( const_cast<CCriticalSection*>(&m_csDirWatchInfo), TRUE);
-	int i(0), max = m_DirectoriesToWatch.GetSize();
+	CCriticalSection::CSingleLock lock( const_cast<CCriticalSection*>(&m_csDirWatchInfo));
+	int i(0), max = (int)m_DirectoriesToWatch.size();
 	CDirWatchInfo * p;
 	for(; i < max; ++i)
 	{
@@ -1238,8 +1177,8 @@ CDirectoryChangeWatcher::CDirWatchInfo * CDirectoryChangeWatcher::GetDirWatchInf
 CDirectoryChangeWatcher::CDirWatchInfo * CDirectoryChangeWatcher::GetDirWatchInfo(CDirectoryChangeHandler * pChangeHandler, int & ref_nIdx)const
 {
 	ASSERT( pChangeHandler != NULL );
-	CSingleLock lock( const_cast<CCriticalSection*>(&m_csDirWatchInfo), TRUE);
-	int i(0),max = m_DirectoriesToWatch.GetSize();
+	CCriticalSection::CSingleLock lock( const_cast<CCriticalSection*>(&m_csDirWatchInfo));
+	int i(0),max = (int)m_DirectoriesToWatch.size();
 	CDirWatchInfo * p;
 	for( ; i < max; ++i)
 	{
@@ -1260,27 +1199,25 @@ long CDirectoryChangeWatcher::ReleaseReferenceToWatcher(CDirectoryChangeHandler 
 }
 
 CDirectoryChangeWatcher::CDirWatchInfo::CDirWatchInfo(HANDLE hDir, 
-													  const CString & strDirectoryName, 
+													  const std::wstring & strDirectoryName, 
 													  CDirectoryChangeHandler * pChangeHandler,
 													  DWORD dwChangeFilter, 
-													  BOOL bWatchSubDir,
-													  bool bAppHasGUI,
-													  LPCTSTR szIncludeFilter,
-													  LPCTSTR szExcludeFilter,
-													  DWORD dwFilterFlags)
+													  BOOL bWatchSubDir
+													  )
  :	m_pChangeHandler( NULL ), 
 	m_hDir(hDir),
 	m_dwChangeFilter( dwChangeFilter ),
 	m_bWatchSubDir( bWatchSubDir ),
 	m_strDirName( strDirectoryName ),
 	m_dwBufLength(0),
+	m_dwBufReadOffset(0),
 	m_dwReadDirError(ERROR_SUCCESS),
-	m_StartStopEvent(FALSE, TRUE), //NOT SIGNALLED, MANUAL RESET
+	m_StartStopEvent(::CreateEvent(0, TRUE, FALSE, NULL)), //NOT SIGNALLED, MANUAL RESET
 	m_RunningState( RUNNING_STATE_NOT_SET )
 { 
 	
 	ASSERT( hDir != INVALID_HANDLE_VALUE 
-		&& !strDirectoryName.IsEmpty() );
+		&& !strDirectoryName.empty() );
 	
 	//
 	//	This object 'decorates' the pChangeHandler passed in
@@ -1290,9 +1227,7 @@ CDirectoryChangeWatcher::CDirWatchInfo::CDirWatchInfo(HANDLE hDir,
 	//	Supports the include and exclude filters
 	//
 	//
-	m_pChangeHandler = new CDelayedDirectoryChangeHandler( pChangeHandler, bAppHasGUI, szIncludeFilter, szExcludeFilter, dwFilterFlags );
-	if( m_pChangeHandler ) 
-		m_pChangeHandler->SetPartialPathOffset( m_strDirName );//to support FILTERS_CHECK_PARTIAL_PATH..this won't change for the duration of the watch, so set it once... HERE!
+	m_pChangeHandler = new CDelayedDirectoryChangeHandler( pChangeHandler);
 	ASSERT( m_pChangeHandler );
 
 	ASSERT( GetChangeHandler() );
@@ -1428,12 +1363,12 @@ DWORD CDirectoryChangeWatcher::CDirWatchInfo::StartMonitor(HANDLE hCompPort)
 			//
 			//	shouldn't ever see this one....but just in case you do, notify me of the problem wesj@hotmail.com.
 			//
-			TRACE(_T("WARNING! Possible lockup detected. FILE: %s Line: %d\n"), _T( __FILE__ ), __LINE__);
+			TRACEF(_T("WARNING! Possible lockup detected. FILE: %s Line: %d\n"), _T( __FILE__ ), __LINE__);
 		}
 	} while( dwWait != WAIT_OBJECT_0 );
 
 	ASSERT( dwWait == WAIT_OBJECT_0 );
-	m_StartStopEvent.ResetEvent();
+	::ResetEvent(m_StartStopEvent);
 	
 	return m_dwReadDirError;//This value is set in the worker thread when it first calls ReadDirectoryChangesW().
 }
@@ -1481,7 +1416,7 @@ BOOL CDirectoryChangeWatcher::CDirWatchInfo::SignalShutdown( HANDLE hCompPort )
 
 	if( !bRetVal )
 	{
-		TRACE(_T("PostQueuedCompletionStatus() failed! GetLastError(): %d\n"), GetLastError());
+		TRACEF(_T("PostQueuedCompletionStatus() failed! GetLastError(): %d\n"), GetLastError());
 	}
 	VERIFY( UnlockProperties() );
 	
@@ -1494,13 +1429,12 @@ BOOL CDirectoryChangeWatcher::CDirWatchInfo::WaitForShutdown()
 //	
 //
 {
-	ASSERT_VALID(&m_StartStopEvent);
-	
+
 	//Wait for the Worker thread to indicate that the watch has been stopped
 	DWORD dwWait;
 	bool bWMQuitReceived = false;
 	do{
-		dwWait	= MsgWaitForMultipleObjects(1, &m_StartStopEvent.m_hObject, FALSE, 5000, QS_ALLINPUT);//wait five seconds
+		dwWait	= MsgWaitForMultipleObjects(1, &m_StartStopEvent, FALSE, 5000, QS_ALLINPUT);//wait five seconds
 		switch( dwWait )
 		{
 		case WAIT_OBJECT_0:
@@ -1540,7 +1474,7 @@ BOOL CDirectoryChangeWatcher::CDirWatchInfo::WaitForShutdown()
 			}break;
 		case WAIT_TIMEOUT:
 			{
-				TRACE(_T("WARNING: Possible Deadlock detected! ThreadID: %d File: %s Line: %d\n"), GetCurrentThreadId(), _T(__FILE__), __LINE__);
+				TRACEF(_T("WARNING: Possible Deadlock detected! ThreadID: %d File: %s Line: %d\n"), GetCurrentThreadId(), _T(__FILE__), __LINE__);
 			}break;
 		}//end switch(dwWait)
 	}while( dwWait != WAIT_OBJECT_0 && !bWMQuitReceived );
@@ -1549,13 +1483,13 @@ BOOL CDirectoryChangeWatcher::CDirWatchInfo::WaitForShutdown()
 	
 	ASSERT( dwWait == WAIT_OBJECT_0 || bWMQuitReceived);
 
-	m_StartStopEvent.ResetEvent();
+	::ResetEvent(m_StartStopEvent);
 	
 	return (BOOL) (dwWait == WAIT_OBJECT_0 || bWMQuitReceived);
 }
 
 
-UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
+void CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 /********************************************
    The worker thread function which monitors directory changes....
 ********************************************/
@@ -1577,7 +1511,7 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
         // through the io port's completion key
         if( !GetQueuedCompletionStatus( pThis->m_hCompPort,
                                    &numBytes,
-                                   (LPDWORD) &pdi,//<-- completion Key
+                                   (PULONG_PTR) &pdi,//<-- completion Key
                                    &lpOverlapped,
                                    INFINITE) )
 		{//The io completion request failed...
@@ -1589,14 +1523,16 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 			//  
 			//
 			if( !pdi 
-			|| ( pdi && AfxIsValidAddress(pdi, sizeof(CDirectoryChangeWatcher::CDirWatchInfo)))
+			|| ( pdi /*&& AfxIsValidAddress(pdi, sizeof(CDirectoryChangeWatcher::CDirWatchInfo))*/)
 					 &&  pdi->m_hDir != INVALID_HANDLE_VALUE //the directory handle is still open! (we expect this when after we close the directory handle )
 			  )
 			{
+				pThis->BailOutBecauseOfError(pdi);
 #ifdef _DEBUG
-			TRACE(_T("GetQueuedCompletionStatus() returned FALSE\nGetLastError(): %d Completion Key: %p lpOverlapped: %p\n"), GetLastError(), pdi, lpOverlapped);
+			TRACEF(_T("GetQueuedCompletionStatus() returned FALSE\nGetLastError(): %d Completion Key: %p lpOverlapped: %p\n"), GetLastError(), pdi, lpOverlapped);
 			MessageBeep( static_cast<UINT>(-1) );
 #endif
+				break;
 			}
 		}
 		
@@ -1607,8 +1543,8 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 			//	that I have deleted this CDirWatchInfo object, but it was still in 
 			//	"in the Queue" of the i/o completion port from a previous overlapped operation.
 			//
-			ASSERT( AfxIsValidAddress(pdi, 
-					sizeof(CDirectoryChangeWatcher::CDirWatchInfo)) );
+// 			ASSERT( AfxIsValidAddress(pdi, 
+// 					sizeof(CDirectoryChangeWatcher::CDirWatchInfo)) );
 			/***********************************
 			The CDirWatchInfo::m_RunningState is pretty much the only member
 			of CDirWatchInfo that can be modified from the other thread.
@@ -1627,7 +1563,7 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 			catch(...){
 				//any sort of exception here indicates I've
 				//got a hosed object.
-				TRACE(_T("CDirectoryChangeWatcher::MonitorDirectoryChanges() -- pdi->LockProperties() raised an exception!\n"));
+				TRACEF(_T("CDirectoryChangeWatcher::MonitorDirectoryChanges() -- pdi->LockProperties() raised an exception!\n"));
 				bObjectShouldBeOk = false;
 			}
 			if( bObjectShouldBeOk )
@@ -1652,7 +1588,7 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 				case CDirWatchInfo::RUNNING_STATE_START_MONITORING:
 					{
 						//Issue the initial call to ReadDirectoryChangesW()
-						
+					  pdi->m_dwBufReadOffset = 0;
 						if( !ReadDirectoryChangesW( pdi->m_hDir,
 											pdi->m_Buffer,//<--FILE_NOTIFY_INFORMATION records are put into this buffer
 											READ_DIR_CHANGE_BUFFER_SIZE,
@@ -1674,7 +1610,7 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 							if( pdi->GetChangeHandler() )
 								pdi->GetChangeHandler()->On_WatchStarted(ERROR_SUCCESS, pdi->m_strDirName );
 						}
-						pdi->m_StartStopEvent.SetEvent();//signall that the ReadDirectoryChangesW has been called
+						::SetEvent(pdi->m_StartStopEvent);//signall that the ReadDirectoryChangesW has been called
 														 //check CDirWatchInfo::m_dwReadDirError to see whether or not ReadDirectoryChangesW succeeded...
 
 						//
@@ -1709,7 +1645,7 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 						{
 							//either we weren't watching this direcotry in the first place,
 							//or we've already stopped monitoring it....
-							pdi->m_StartStopEvent.SetEvent();//set the event that ReadDirectoryChangesW has returned and no further calls to it will be made...
+							::SetEvent(pdi->m_StartStopEvent);//set the event that ReadDirectoryChangesW has returned and no further calls to it will be made...
 						}
 						
 					
@@ -1722,7 +1658,7 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 						//Using CloseHandle() on the directory handle used by
 						//ReadDirectoryChangesW will cause it to return via GetQueuedCompletionStatus()....
 						if( pdi->m_hDir == INVALID_HANDLE_VALUE )
-							pdi->m_StartStopEvent.SetEvent();//signal that no further calls to ReadDirectoryChangesW will be made
+							::SetEvent(pdi->m_StartStopEvent);//signal that no further calls to ReadDirectoryChangesW will be made
 															 //and this pdi can be deleted 
 						else
 						{//for some reason, the handle is still open..
@@ -1745,7 +1681,7 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 						DWORD dwReadBuffer_Offset = 0UL;
 
 						//process the FILE_NOTIFY_INFORMATION records:
-						CFileNotifyInformation notify_info( (LPBYTE)pdi->m_Buffer, READ_DIR_CHANGE_BUFFER_SIZE);
+						CFileNotifyInformation notify_info((LPBYTE)pdi->m_Buffer, numBytes + dwReadBuffer_Offset, READ_DIR_CHANGE_BUFFER_SIZE);
 
 						pThis->ProcessChangeNotifications(notify_info, pdi, dwReadBuffer_Offset);
 		
@@ -1753,6 +1689,7 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 						//	Changes have been processed,
 						//	Reissue the watch command
 						//
+						pdi->m_dwBufReadOffset = dwReadBuffer_Offset;
 						if( !ReadDirectoryChangesW( pdi->m_hDir,
 											  pdi->m_Buffer + dwReadBuffer_Offset,//<--FILE_NOTIFY_INFORMATION records are put into this buffer 
 								              READ_DIR_CHANGE_BUFFER_SIZE - dwReadBuffer_Offset,
@@ -1762,50 +1699,8 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 											&pdi->m_Overlapped,
 											NULL) )//no completion routine!
 						{
-							//
-							//	NOTE:  
-							//		In this case the thread will not wake up for 
-							//		this pdi object because it is no longer associated w/
-							//		the I/O completion port...there will be no more outstanding calls to ReadDirectoryChangesW
-							//		so I have to skip the normal shutdown routines(normal being what happens when CDirectoryChangeWatcher::UnwatchDirectory() is called.
-							//		and close this up, & cause it to be freed.
-							//
-							TRACE(_T("WARNING: ReadDirectoryChangesW has failed during normal operations...failed on directory: %s\n"), pdi->m_strDirName);
-
-							ASSERT( pThis );
-							//
-							//	To help insure that this has been unwatched by the time
-							//	the main thread processes the On_ReadDirectoryChangesError() notification
-							//	bump the thread priority up temporarily.  The reason this works is because the notification
-							//	is really posted to another thread's message queue,...by setting this thread's priority
-							//	to highest, this thread will get to shutdown the watch by the time the other thread has a chance
-							//	to handle it. *note* not technically guaranteed 100% to be the case, but in practice it'll work.
-							int nOldThreadPriority = GetThreadPriority( GetCurrentThread() );
-							SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);							
-
-							//
-							//	Notify the client object....(a CDirectoryChangeHandler derived class)
-							//
-							try{
-								pdi->m_dwReadDirError = GetLastError();
-								pdi->GetChangeHandler()->On_ReadDirectoryChangesError( pdi->m_dwReadDirError, pdi->m_strDirName );
-
-
-								//Do the shutdown
-								pThis->UnwatchDirectoryBecauseOfError( pdi );
-								//pdi = NULL; <-- DO NOT set this to NULL, it will cause this worker thread to exit.
-								//pdi is INVALID at this point!!
-							}
-							catch(...)
-							{
-								//just in case of exception, this thread will be set back to 
-								//normal priority.
-							}
-							//
-							//	Set the thread priority back to normal.
-							//
-							SetThreadPriority(GetCurrentThread(), nOldThreadPriority);
-													
+							pThis->BailOutBecauseOfError(pdi);
+							break;
 						}
 						else
 						{//success, continue as normal
@@ -1813,7 +1708,7 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
 						}
 					}break;
 				default:
-					TRACE(_T("MonitorDirectoryChanges() -- how did I get here?\n"));
+					TRACEF(_T("MonitorDirectoryChanges() -- how did I get here?\n"));
 					break;//how did I get here?
 				}//end switch( pdi->m_RunningState )
 		
@@ -1824,7 +1719,7 @@ UINT CDirectoryChangeWatcher::MonitorDirectoryChanges(LPVOID lpvThis)
     } while( pdi );
 
 	pThis->On_ThreadExit();
-	return 0; //thread is ending
+	return; //thread is ending
 }
 
 void CDirectoryChangeWatcher::ProcessChangeNotifications(IN CFileNotifyInformation & notify_info, 
@@ -1842,17 +1737,17 @@ void CDirectoryChangeWatcher::ProcessChangeNotifications(IN CFileNotifyInformati
 	//	Sanity check...
 	//	this function should only be called by the worker thread.
 	//	
-	ASSERT( m_dwThreadID == GetCurrentThreadId() );
+	ASSERT( m_hThread->id() == OSThread::currentThreadID() );
 
 	//	Validate parameters...
 	//	
 	ASSERT( pdi );
-	ASSERT( AfxIsValidAddress(pdi, sizeof(CDirectoryChangeWatcher::CDirWatchInfo) ) );
+//	ASSERT( AfxIsValidAddress(pdi, sizeof(CDirectoryChangeWatcher::CDirWatchInfo) ) );
 
-	if( !pdi || !AfxIsValidAddress(pdi, sizeof(CDirectoryChangeWatcher::CDirWatchInfo)) )
+	if( !pdi )// || !AfxIsValidAddress(pdi, sizeof(CDirectoryChangeWatcher::CDirWatchInfo)) )
 	{
-		TRACE(_T("Invalid arguments to CDirectoryChangeWatcher::ProcessChangeNotifications() -- pdi is invalid!\n"));
-		TRACE(_T("File: %s Line: %d"), _T( __FILE__ ), __LINE__ );
+		TRACEF(_T("Invalid arguments to CDirectoryChangeWatcher::ProcessChangeNotifications() -- pdi is invalid!\n"));
+		TRACEF(_T("File: %s Line: %d"), _T( __FILE__ ), __LINE__ );
 		return;
 	}
 
@@ -1865,12 +1760,12 @@ void CDirectoryChangeWatcher::ProcessChangeNotifications(IN CFileNotifyInformati
 	CDirectoryChangeHandler * pChangeHandler = pdi->GetChangeHandler();
 	//CDelayedDirectoryChangeHandler * pChangeHandler = pdi->GetChangeHandler();
 	ASSERT( pChangeHandler );
-	ASSERT( AfxIsValidAddress(pChangeHandler, sizeof(CDirectoryChangeHandler)) );
+//	ASSERT( AfxIsValidAddress(pChangeHandler, sizeof(CDirectoryChangeHandler)) );
 	//ASSERT( AfxIsValidAddress(pChangeHandler, sizeof(CDelayedDirectoryChangeHandler)) );
 	if( !pChangeHandler )
 	{
-		TRACE(_T("CDirectoryChangeWatcher::ProcessChangeNotifications() Unable to continue, pdi->GetChangeHandler() returned NULL!\n"));
-		TRACE(_T("File: %s  Line: %d\n"), _T( __FILE__ ), __LINE__ );
+		TRACEF(_T("CDirectoryChangeWatcher::ProcessChangeNotifications() Unable to continue, pdi->GetChangeHandler() returned NULL!\n"));
+		TRACEF(_T("File: %s  Line: %d\n"), _T( __FILE__ ), __LINE__ );
 		return;
 	}
 
@@ -1919,7 +1814,7 @@ void CDirectoryChangeWatcher::ProcessChangeNotifications(IN CFileNotifyInformati
 			 //This record is followed by another one w/
 			 //the action set to FILE_ACTION_RENAMED_NEW_NAME (contains the new name of the file
 
-				CString strOldFileName = notify_info.GetFileNameWithPath( pdi->m_strDirName );
+				std::wstring strOldFileName = notify_info.GetFileNameWithPath( pdi->m_strDirName );
 
 				
 				if( notify_info.GetNextNotifyInformation() )
@@ -1930,7 +1825,7 @@ void CDirectoryChangeWatcher::ProcessChangeNotifications(IN CFileNotifyInformati
 					ASSERT( notify_info.GetAction() == FILE_ACTION_RENAMED_NEW_NAME );//making sure that the next record after the OLD_NAME record is the NEW_NAME record
 
 					//get the new file name
-					CString strNewFileName = notify_info.GetFileNameWithPath( pdi->m_strDirName );
+					std::wstring strNewFileName = notify_info.GetFileNameWithPath( pdi->m_strDirName );
 
 					pChangeHandler->On_FileNameChanged( strOldFileName, strNewFileName);
 				}
@@ -2015,12 +1910,63 @@ void CDirectoryChangeWatcher::ProcessChangeNotifications(IN CFileNotifyInformati
 			}
 		
 		default:
-			TRACE(_T("CDirectoryChangeWatcher::ProcessChangeNotifications() -- unknown FILE_ACTION_ value! : %d\n"), notify_info.GetAction() );
+			TRACEF(_T("CDirectoryChangeWatcher::ProcessChangeNotifications() -- unknown FILE_ACTION_ value! : %d\n"), notify_info.GetAction() );
+			//a file was changed
+			//pdi->m_pChangeHandler->On_FileModified( strLastFileName ); break;
+			pChangeHandler->On_UnknownChange(); break;
 			break;//unknown action
 		}
 
-		dwLastAction = notify_info.GetAction();
+		dwLastAction = notify_info.GetAction();	
 		
     
 	} while( notify_info.GetNextNotifyInformation() );
+}
+
+
+void CDirectoryChangeWatcher::BailOutBecauseOfError(CDirWatchInfo * pdi)
+{
+	//
+	//	NOTE:  
+	//		In this case the thread will not wake up for 
+	//		this pdi object because it is no longer associated w/
+	//		the I/O completion port...there will be no more outstanding calls to ReadDirectoryChangesW
+	//		so I have to skip the normal shutdown routines(normal being what happens when CDirectoryChangeWatcher::UnwatchDirectory() is called.
+	//		and close this up, & cause it to be freed.
+	//
+	TRACEF(_T("WARNING: ReadDirectoryChangesW has failed during normal operations...failed on directory: %S\n"), pdi->m_strDirName.c_str());
+
+	ASSERT( this );
+	//
+	//	To help insure that this has been unwatched by the time
+	//	the main thread processes the On_ReadDirectoryChangesError() notification
+	//	bump the thread priority up temporarily.  The reason this works is because the notification
+	//	is really posted to another thread's message queue,...by setting this thread's priority
+	//	to highest, this thread will get to shutdown the watch by the time the other thread has a chance
+	//	to handle it. *note* not technically guaranteed 100% to be the case, but in practice it'll work.
+	int nOldThreadPriority = GetThreadPriority( GetCurrentThread() );
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);							
+
+	//
+	//	Notify the client object....(a CDirectoryChangeHandler derived class)
+	//
+	try{
+		pdi->m_dwReadDirError = GetLastError();
+		pdi->GetChangeHandler()->On_ReadDirectoryChangesError( pdi->m_dwReadDirError, pdi->m_strDirName );
+
+
+		//Do the shutdown
+		UnwatchDirectoryBecauseOfError( pdi );
+		//pdi = NULL; <-- DO NOT set this to NULL, it will cause this worker thread to exit.
+		//pdi is INVALID at this point!!
+	}
+	catch(...)
+	{
+		//just in case of exception, this thread will be set back to 
+		//normal priority.
+	}
+	//
+	//	Set the thread priority back to normal.
+	//
+	SetThreadPriority(GetCurrentThread(), nOldThreadPriority);
 }
