@@ -1,0 +1,307 @@
+//Microsoft Developer Studio generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#define _AFX_NO_SPLITTER_RESOURCES\r\n"
+    "#define _AFX_NO_OLE_RESOURCES\r\n"
+    "#define _AFX_NO_TRACKER_RESOURCES\r\n"
+    "#define _AFX_NO_PROPERTY_RESOURCES\r\n"
+    "\r\n"
+    "#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)\r\n"
+    "#ifdef _WIN32\r\n"
+    "LANGUAGE 9, 1\r\n"
+    "#pragma code_page(1252)\r\n"
+    "#endif //_WIN32\r\n"
+    "#include ""res\\DirWatcher.rc2""  // non-Microsoft Visual C++ edited resources\r\n"
+    "#include ""afxres.rc""         // Standard components\r\n"
+    "#endif\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDR_MAINFRAME           ICON    DISCARDABLE     "res\\DirWatcher.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_DIRWATCHER_DIALOG DIALOGEX 0, 0, 443, 266
+STYLE DS_MODALFRAME | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "DirWatcher"
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Exit",IDCANCEL,386,7,50,14
+    LTEXT           "Directory to watch: ",IDC_STATIC,7,36,62,8
+    EDITTEXT        IDC_EDIT_DIR_TO_MONITOR,7,45,215,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "...",IDC_BTN_BROWSE1,223,45,13,14
+    LTEXT           "Include:",IDC_STATIC,248,43,26,8
+    EDITTEXT        IDC_EDIT_INCLUDE_FILTER1,278,38,52,14,ES_AUTOHSCROLL
+    LTEXT           "Exclude:",IDC_STATIC,246,57,28,8
+    EDITTEXT        IDC_EDIT_EXCLUDE_FILTER1,278,54,52,14,ES_AUTOHSCROLL
+    GROUPBOX        "Filters:",IDC_STATIC,241,32,98,39
+    CONTROL         "File Name",IDC_CHECK_FILE_NAME1,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,7,61,49,10
+    CONTROL         "Last Write",IDC_CHECK_LAST_WRITE1,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,7,71,48,10
+    CONTROL         "Dir Name",IDC_CHECK_DIR_NAME1,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,66,61,45,10
+    CONTROL         "Last Access",IDC_CHECK_LAST_ACCESS1,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,66,71,55,10
+    CONTROL         "Size",IDC_CHECK_SIZE1,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,137,62,29,10
+    CONTROL         "Creation",IDC_CHECK_CREATION1,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,137,71,42,10
+    CONTROL         "Attributes",IDC_CHECK_ATTRIBUTES1,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,193,61,45,10
+    CONTROL         "Security",IDC_CHECK_SECURITY1,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,193,71,41,10
+    CONTROL         "Watch Sub dirs ",IDC_CHECK_SUBDIR1,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,247,72,67,10
+    PUSHBUTTON      "Start Watch",IDC_BTN_MONITOR,343,45,50,14
+    PUSHBUTTON      "Clear List Box",IDC_BTN_CLEAR1,386,66,50,14
+    LISTBOX         IDC_LIST_CHANGES,7,82,428,54,LBS_NOINTEGRALHEIGHT | 
+                    WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Directory To Watch: ",IDC_STATIC,7,151,67,8
+    EDITTEXT        IDC_EDIT_DIR_TO_MONITOR2,7,162,215,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "...",IDC_BTN_BROWSE2,224,161,13,14
+    LTEXT           "Include:",IDC_STATIC,249,159,26,8
+    EDITTEXT        IDC_EDIT_INCLUDE_FILTER2,278,154,52,14,ES_AUTOHSCROLL
+    LTEXT           "Exclude:",IDC_STATIC,247,172,28,8
+    EDITTEXT        IDC_EDIT_EXCLUDE_FILTER2,278,170,52,14,ES_AUTOHSCROLL
+    GROUPBOX        "Filters:",IDC_STATIC,242,148,98,39
+    CONTROL         "File Name",IDC_CHECK_FILE_NAME2,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,9,177,49,10
+    CONTROL         "Last Write",IDC_CHECK_LAST_WRITE2,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,9,187,48,10
+    CONTROL         "Dir Name",IDC_CHECK_DIR_NAME2,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,67,177,45,10
+    CONTROL         "Last Access",IDC_CHECK_LAST_ACCESS2,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,67,187,55,10
+    CONTROL         "Size",IDC_CHECK_SIZE2,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,141,177,29,10
+    CONTROL         "Creation",IDC_CHECK_CREATION2,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,141,187,42,10
+    CONTROL         "Attributes",IDC_CHECK_ATTRIBUTES2,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,193,177,45,10
+    CONTROL         "Security",IDC_CHECK_SECURITY2,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,193,187,41,10
+    CONTROL         "Watch Sub dirs",IDC_CHECK_SUBDIR2,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,253,187,65,10
+    PUSHBUTTON      "Start Watch",IDC_BTN_MONITOR2,343,161,50,14
+    PUSHBUTTON      "Clear List Box",IDC_BTN_CLEAR2,386,186,50,14
+    LISTBOX         IDC_LIST_CHANGES2,7,201,428,54,LBS_NOINTEGRALHEIGHT | 
+                    WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "Directory Watch 1:",IDC_STATIC,3,28,437,113
+    GROUPBOX        "Directory Watch 2:",IDC_STATIC,3,142,437,117
+    PUSHBUTTON      "Test Filter Patterns...",IDC_BTN_TEST_PATTERNS,181,7,81,
+                    14
+    PUSHBUTTON      "Set Filter Flags...",IDC_BTN_SET_FILTER_FLAGS,6,7,81,14
+END
+
+IDD_DLG_TEST_PATTERNS DIALOGEX 0, 0, 186, 127
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Test Filter Patterns"
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Close",IDCANCEL,129,84,50,14
+    LTEXT           "Test Path:",IDC_STATIC,7,31,34,8
+    EDITTEXT        IDC_EDIT_TEST_PATH,14,41,136,14,ES_AUTOHSCROLL | 
+                    ES_WANTRETURN
+    LTEXT           "Test Pattern:",IDC_STATIC,5,56,42,8
+    EDITTEXT        IDC_EDIT_TEST_PATTERN,15,65,104,14,ES_AUTOHSCROLL | 
+                    ES_WANTRETURN
+    LTEXT           "Use this dialog to test a file path against a specified filter pattern.  Uses PathMatchSpec() API function",
+                    IDC_STATIC,7,7,166,22
+    PUSHBUTTON      "Test",IDC_BTN_TEST,59,84,50,14
+    CTEXT           "",IDC_STATIC_TEST_RESULTS,7,103,172,17,0,
+                    WS_EX_CLIENTEDGE
+END
+
+IDD_SET_FILTER_FLAGS_DLG DIALOG DISCARDABLE  0, 0, 380, 93
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Set Filter Flags.."
+FONT 8, "MS Sans Serif"
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,323,7,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,323,24,50,14
+    CONTROL         "Don't Use Filters",IDC_RADIO_DONT_USE_FILTERS,"Button",
+                    BS_AUTORADIOBUTTON,10,17,67,10
+    CONTROL         "Check Full Path",IDC_RADIO_CHECK_FULL_PATH,"Button",
+                    BS_AUTORADIOBUTTON,10,29,66,10
+    CONTROL         "Check Partial Path",IDC_RADIO_CHECK_PARTIAL_PATH,"Button",
+                    BS_AUTORADIOBUTTON,10,41,75,10
+    CONTROL         "Check File Name Only",IDC_RADIO_CHECK_FILENAME_ONLY,
+                    "Button",BS_AUTORADIOBUTTON,10,53,86,10
+    GROUPBOX        "Include/Exclude Filter Options:",IDC_STATIC,0,7,108,71,
+                    WS_GROUP
+    CONTROL         "Don't test Handler class(On_FilterNotification())",
+                    IDC_RADIO_DONT_TEST_HANDLER,"Button",BS_AUTORADIOBUTTON,
+                    123,17,162,10
+    CONTROL         "Test Handler class before filters",
+                    IDC_RADIO_TEST_HANDLER_BEFORE,"Button",
+                    BS_AUTORADIOBUTTON,123,29,113,10
+    CONTROL         "Test Handler class after filters",
+                    IDC_RADIO_TEST_HANDLER_AFTER,"Button",BS_AUTORADIOBUTTON,
+                    123,41,109,10
+    CONTROL         "On_WatchStarted is called",IDC_CHECK_WATCHSTARTED,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,124,53,103,10
+    CONTROL         "On_WatchStopped is called",IDC_CHECK_WATCHSTOPPED,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,124,65,145,10
+    GROUPBOX        "CDirectoryChangeHandler options:",IDC_STATIC,117,7,196,
+                    71,WS_GROUP
+END
+
+
+#ifndef _MAC
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,1
+ PRODUCTVERSION 1,0,0,1
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "\0"
+            VALUE "FileDescription", "DirWatcher MFC Application\0"
+            VALUE "FileVersion", "1, 0, 0, 1\0"
+            VALUE "InternalName", "DirWatcher\0"
+            VALUE "LegalCopyright", "Copyright (C) 2001\0"
+            VALUE "LegalTrademarks", "\0"
+            VALUE "OriginalFilename", "DirWatcher.EXE\0"
+            VALUE "ProductName", "DirWatcher Application\0"
+            VALUE "ProductVersion", "1, 0, 0, 1\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+#endif    // !_MAC
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    IDD_DIRWATCHER_DIALOG, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 436
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 259
+    END
+
+    IDD_DLG_TEST_PATTERNS, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 179
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 120
+    END
+
+    IDD_SET_FILTER_FLAGS_DLG, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 373
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 86
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+#define _AFX_NO_SPLITTER_RESOURCES
+#define _AFX_NO_OLE_RESOURCES
+#define _AFX_NO_TRACKER_RESOURCES
+#define _AFX_NO_PROPERTY_RESOURCES
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE 9, 1
+#pragma code_page(1252)
+#endif //_WIN32
+#include "res\DirWatcher.rc2"  // non-Microsoft Visual C++ edited resources
+#include "afxres.rc"         // Standard components
+#endif
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
