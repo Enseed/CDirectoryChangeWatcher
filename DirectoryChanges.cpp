@@ -1,9 +1,7 @@
-#include "Precompiled.h"
-
-#include <Enseed/Generic/Math/Integer.h>
+#include <Generic/Math/Integer.h>
 #include <Wrapper/OSA/OSThread/OSThread.h>
 #include <boost/bind.hpp>
-#include <Enseed/Generic/Math/Integer.h>
+#include <Generic/Math/Integer.h>
 
 // DirectoryChanges.cpp: implementation of the CDirectoryChangeWatcher and CDirectoryChangeHandler classes.
 //

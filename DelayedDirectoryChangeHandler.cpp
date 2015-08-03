@@ -1,4 +1,3 @@
-#include "Precompiled.h"
 // DelayedDirectoryChangeHandler.cpp: implementation of the CDelayedDirectoryChangeHandler2 class.
 //
 //////////////////////////////////////////////////////////////////////

@@ -61,8 +61,9 @@
 #endif // _MSC_VER > 1000
 
 #include <Wrapper/OSA/OSThread/OSThread.h>
-#include <Enseed/Generic/AutoPtr/AutoPtr.h>
-#include <Enseed/Generic/Base/win/Windows.h>
+#include <Generic/AutoPtr/AutoPtr.h>
+#include <Generic/Base/win/Windows.h>
+#include <vector>
 
 //#include <afxmt.h>
 //#include <afxtempl.h>
